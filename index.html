@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site Survey Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #f3f4f6; }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body class="p-4">
+
+    <header class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-800">Site Survey Tool</h1>
+        <p class="text-sm text-slate-500">Standalone Manager Assistant</p>
+    </header>
+
+    <div id="surveyForm">
+        <div class="card">
+            <h2 class="font-bold mb-3 border-b pb-2">General Info</h2>
+            <input type="text" id="siteName" placeholder="Project Name" class="w-full p-2 border rounded mb-2">
+            <input type="date" id="surveyDate" class="w-full p-2 border rounded">
+        </div>
+
+        <div class="card">
+            <h2 class="font-bold mb-3 border-b pb-2">Site Observations</h2>
+            <label class="block text-sm mb-1">Safety Compliance</label>
+            <select id="safetyStatus" class="w-full p-2 border rounded mb-4">
+                <option>Select Status...</option>
+                <option>Good</option>
+                <option>Action Required</option>
+                <option>Critical Issue</option>
+            </select>
+            
+            <label class="block text-sm mb-1">General Notes</label>
+            <textarea id="notes" rows="4" class="w-full p-2 border rounded" placeholder="What did you see today?"></textarea>
+        </div>
+
+        <div class="card">
+            <h2 class="font-bold mb-3 border-b pb-2">Photos</h2>
+            <input type="file" accept="image/*" capture="environment" class="text-sm">
+        </div>
+
+        <button onclick="saveSurvey()" class="w-full bg-blue-600 text-white font-bold py-3 rounded-lg shadow-lg active:bg-blue-700">
+            Save Report Locally
+        </button>
+    </div>
+
+    <div id="history" class="mt-8">
+        <h2 class="text-xl font-bold mb-4">Saved Reports</h2>
+        <div id="reportList"></div>
+    </div>
+
+    <script>
+        function saveSurvey() {
+            const data = {
+                site: document.getElementById('siteName').value,
+                date: document.getElementById('surveyDate').value,
+                notes: document.getElementById('notes').value,
+                safety: document.getElementById('safetyStatus').value,
+                timestamp: new Date().getTime()
+            };
+
+            let reports = JSON.parse(localStorage.getItem('siteReports') || '[]');
+            reports.push(data);
+            localStorage.setItem('siteReports', JSON.stringify(reports));
+            
+            alert('Survey Saved!');
+            renderReports();
+        }
+
+        function renderReports() {
+            const list = document.getElementById('reportList');
+            const reports = JSON.parse(localStorage.getItem('siteReports') || '[]');
+            list.innerHTML = reports.map(r => `
+                <div class="card">
+                    <p><strong>${r.site}</strong> - ${r.date}</p>
+                    <p class="text-sm text-gray-600">${r.notes}</p>
+                </div>
+            `).join('');
+        }
+
+        window.onload = renderReports;
+    </script>
+</body>
+</html>
