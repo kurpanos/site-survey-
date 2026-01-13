@@ -11,12 +11,10 @@
         .btn { @apply px-4 py-3 rounded-lg font-semibold shadow-sm transition-all active:scale-95; }
         .btn-primary { @apply bg-blue-600 text-white hover:bg-blue-700; }
         .btn-secondary { @apply bg-white text-slate-700 border border-slate-300; }
-        .btn-danger { @apply bg-red-50 text-red-600 border border-red-200; }
         .card { @apply bg-white rounded-xl shadow-sm border border-slate-200 p-4 mb-4; }
-        .input-field { @apply w-full p-3 border border-slate-300 rounded-lg mb-3 focus:ring-2 focus:ring-blue-500 outline-none; }
         /* Smooth view transitions */
-        .view-section { display: none; animation: fadeIn 0.3s ease; }
-        .view-section.active { display: block; }
+        .view-section { display: none; }
+        .view-section.active { display: block; animation: fadeIn 0.3s ease; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
@@ -34,9 +32,11 @@
         <div id="view-projects" class="view-section active">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-xl font-bold text-slate-800">Projects</h2>
-                <button onclick="createNewProject()" class="btn btn-primary text-sm">+ New Project</button>
+                <button onclick="createNewProject()" class="btn btn-primary text-sm shadow-md">+ New Project</button>
             </div>
-            <div id="projectsList" class="space-y-3"></div>
+            <div id="projectsList" class="space-y-3">
+                <p class="text-center text-slate-400 mt-8 text-sm">Loading database...</p>
+            </div>
         </div>
 
         <div id="view-sections" class="view-section">
@@ -49,7 +49,6 @@
             
             <hr class="my-6 border-slate-200">
             <button onclick="generatePDF()" class="btn btn-secondary w-full flex justify-center items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                 Generate PDF Report
             </button>
         </div>
@@ -72,8 +71,7 @@
             <div class="card bg-blue-50 border-blue-100">
                 <label class="block w-full cursor-pointer">
                     <div class="flex flex-col items-center justify-center pt-4 pb-4">
-                        <svg class="w-8 h-8 text-blue-500 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
-                        <span class="text-sm font-semibold text-blue-600">Take Photos (Multiple)</span>
+                        <span class="text-sm font-semibold text-blue-600">📸 Take Photos (Multiple)</span>
                     </div>
                     <input type="file" class="hidden" accept="image/*" multiple capture="environment" onchange="handlePhotoUpload(this)">
                 </label>
@@ -84,29 +82,43 @@
     </main>
 
     <script>
+        // --- UTILS ---
+        // New simpler ID generator that works on all browsers
+        function generateId() {
+            return Date.now().toString(36) + Math.random().toString(36).substr(2);
+        }
+
         // --- DATABASE LAYER (IndexedDB) ---
         const DB_NAME = 'SiteSurveyDB_v2';
         const STORE_NAME = 'projects';
-        let db;
+        let db = null;
 
         const initDB = () => {
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open(DB_NAME, 1);
                 request.onupgradeneeded = (e) => {
-                    const db = e.target.result;
-                    if (!db.objectStoreNames.contains(STORE_NAME)) {
-                        db.createObjectStore(STORE_NAME, { keyPath: 'id' });
+                    const database = e.target.result;
+                    if (!database.objectStoreNames.contains(STORE_NAME)) {
+                        database.createObjectStore(STORE_NAME, { keyPath: 'id' });
                     }
                 };
                 request.onsuccess = (e) => {
                     db = e.target.result;
+                    console.log("DB Loaded");
                     resolve(db);
                 };
-                request.onerror = (e) => reject(e);
+                request.onerror = (e) => {
+                    alert("Database failed to load. Please refresh.");
+                    reject(e);
+                };
             });
         };
 
         const dbAction = (type, data = null, key = null) => {
+            if (!db) {
+                alert("Database not ready yet. Please refresh the page.");
+                return Promise.reject("DB not ready");
+            }
             return new Promise((resolve, reject) => {
                 const tx = db.transaction(STORE_NAME, 'readwrite');
                 const store = tx.objectStore(STORE_NAME);
@@ -153,33 +165,46 @@
         }
 
         // --- INITIALIZATION ---
-        initDB().then(() => loadProjects());
+        // Initialize DB and then load projects
+        initDB().then(() => {
+            loadProjects();
+        }).catch(err => {
+            console.error(err);
+            document.getElementById('projectsList').innerHTML = '<p class="text-red-500">Error loading database.</p>';
+        });
 
         // --- PROJECT LOGIC ---
         async function loadProjects() {
-            state.projects = await dbAction('getAll') || [];
-            const container = document.getElementById('projectsList');
-            container.innerHTML = state.projects.length ? '' : '<p class="text-center text-slate-400 mt-8">No projects yet.</p>';
-            
-            state.projects.sort((a,b) => b.updatedAt - a.updatedAt).forEach(p => {
-                const div = document.createElement('div');
-                div.className = 'card cursor-pointer hover:border-blue-400 flex justify-between items-center';
-                div.innerHTML = `<div><h3 class="font-bold text-lg">${p.name}</h3><p class="text-xs text-slate-500">${new Date(p.updatedAt).toLocaleDateString()}</p></div><span class="text-slate-300">➜</span>`;
-                div.onclick = () => openProject(p.id);
-                container.appendChild(div);
-            });
+            try {
+                state.projects = await dbAction('getAll') || [];
+                const container = document.getElementById('projectsList');
+                container.innerHTML = state.projects.length ? '' : '<p class="text-center text-slate-400 mt-8">No projects yet. Click + New Project.</p>';
+                
+                state.projects.sort((a,b) => b.updatedAt - a.updatedAt).forEach(p => {
+                    const div = document.createElement('div');
+                    div.className = 'card cursor-pointer hover:border-blue-400 flex justify-between items-center';
+                    div.innerHTML = `<div><h3 class="font-bold text-lg">${p.name}</h3><p class="text-xs text-slate-500">${new Date(p.updatedAt).toLocaleDateString()}</p></div><span class="text-slate-300">➜</span>`;
+                    div.onclick = () => openProject(p.id);
+                    container.appendChild(div);
+                });
+            } catch (e) {
+                console.error("Load error:", e);
+            }
         }
 
         async function createNewProject() {
-            const name = prompt("Project Name:");
+            if (!db) { alert("Please wait for database to load..."); return; }
+            const name = prompt("Enter Project Name:");
             if (!name) return;
+            
             const newProject = { 
-                id: crypto.randomUUID(), 
+                id: generateId(), 
                 name, 
                 createdAt: Date.now(), 
                 updatedAt: Date.now(),
                 sections: [] 
             };
+            
             await dbAction('put', newProject);
             loadProjects();
         }
@@ -187,11 +212,3 @@
         function openProject(id) {
             state.currentProject = state.projects.find(p => p.id === id);
             document.getElementById('currentProjectTitle').innerText = state.currentProject.name;
-            renderSections();
-            navigateTo('view-sections');
-        }
-
-        // --- SECTION LOGIC ---
-        function renderSections() {
-            const container = document.getElementById('sectionsList');
-            container.innerHTML = state.current
